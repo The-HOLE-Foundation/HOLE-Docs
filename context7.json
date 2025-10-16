@@ -1,0 +1,52 @@
+{
+  "$schema": "https://context7.dev/schema.json",
+  "name": "HOLE-Docs",
+  "description": "Documentation repository for The HOLE Foundation projects, tools, and frameworks",
+  "repository": "https://github.com/The-HOLE-Foundation/HOLE-Docs",
+  "docs": {
+    "path": "docs",
+    "patterns": [
+      "**/*.md",
+      "**/*.mdx"
+    ],
+    "exclude": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**"
+    ]
+  },
+  "sections": [
+    {
+      "name": "Getting Started",
+      "path": "docs/getting-started",
+      "description": "Quick start guides and introductions to The HOLE Foundation projects"
+    },
+    {
+      "name": "Tools",
+      "path": "docs/tools",
+      "description": "Documentation for development tools used by The HOLE Foundation repositories"
+    },
+    {
+      "name": "Projects",
+      "path": "docs/projects",
+      "description": "Documentation for software and tools built by The HOLE Foundation"
+    },
+    {
+      "name": "Guides",
+      "path": "docs/guides",
+      "description": "How-to guides and tutorials for using The HOLE Foundation's work"
+    },
+    {
+      "name": "API Reference",
+      "path": "docs/api-reference",
+      "description": "API documentation and technical references"
+    }
+  ],
+  "metadata": {
+    "organization": "The HOLE Foundation",
+    "license": "MIT",
+    "maintainers": [
+      "The HOLE Foundation Team"
+    ]
+  }
+}
