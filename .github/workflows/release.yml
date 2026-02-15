@@ -1,0 +1,256 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: arm64
+            platform: macos-arm64
+          - goos: darwin
+            goarch: amd64
+            platform: macos-amd64
+          - goos: linux
+            goarch: amd64
+            platform: linux-amd64
+          - goos: linux
+            goarch: arm64
+            platform: linux-arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist/${{ matrix.platform }}
+          go build -ldflags="-s -w -X main.Version=${{ steps.version.outputs.version }}" \
+            -o dist/${{ matrix.platform }}/hole-docs \
+            ./cmd/hole-docs
+          chmod +x dist/${{ matrix.platform }}/hole-docs
+
+      - name: Create README
+        run: |
+          cat > dist/${{ matrix.platform }}/README.md << 'EOF'
+          # hole-docs
+
+          **Free PDF tools for transparency workflows**
+
+          Version: ${{ steps.version.outputs.version }}
+          Platform: ${{ matrix.platform }}
+
+          ## Quick Start
+
+          ```bash
+          # Merge PDFs
+          hole-docs merge output.pdf file1.pdf file2.pdf
+
+          # Render to images
+          hole-docs render document.pdf ./images/
+
+          # Extract annotations
+          hole-docs annotations reviewed.pdf
+
+          # Start MCP server
+          hole-docs serve --http
+          ```
+
+          ## Installation
+
+          ```bash
+          # macOS / Linux
+          sudo mv hole-docs /usr/local/bin/
+          hole-docs help
+          ```
+
+          ## Documentation
+
+          https://github.com/The-HOLE-Foundation/hole-docs
+
+          Built by The HOLE Foundation
+          Making transparency accessible to everyone
+          EOF
+
+      - name: Create archive
+        run: |
+          cd dist/${{ matrix.platform }}
+          tar -czf ../hole-docs-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz *
+          cd ..
+          if command -v sha256sum &> /dev/null; then
+            sha256sum hole-docs-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz > hole-docs-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz.sha256
+          else
+            shasum -a 256 hole-docs-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz > hole-docs-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz.sha256
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hole-docs-${{ steps.version.outputs.version }}-${{ matrix.platform }}
+          path: |
+            dist/hole-docs-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz
+            dist/hole-docs-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz.sha256
+
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -name "*.tar.gz*" -exec cp {} release-assets/ \;
+          ls -lh release-assets/
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          cat > RELEASE_NOTES.md << 'EOF'
+          # hole-docs ${{ steps.version.outputs.version }}
+
+          **Free PDF tools for transparency workflows**
+
+          > Making public records accessible without expensive software
+
+          ## Mission
+
+          Access to public records shouldn't require subscriptions or expensive tools.
+          hole-docs provides professional PDF capabilities - completely free and open source.
+
+          Built by [The HOLE Foundation](https://theholetruth.org) for transparency advocates everywhere.
+
+          ## Downloads
+
+          Choose your platform:
+
+          **macOS**:
+          - Apple Silicon (M1/M2/M3): `hole-docs-${{ steps.version.outputs.version }}-macos-arm64.tar.gz`
+          - Intel: `hole-docs-${{ steps.version.outputs.version }}-macos-amd64.tar.gz`
+
+          **Linux**:
+          - AMD64 (Ubuntu/Debian): `hole-docs-${{ steps.version.outputs.version }}-linux-amd64.tar.gz`
+          - ARM64 (Raspberry Pi): `hole-docs-${{ steps.version.outputs.version }}-linux-arm64.tar.gz`
+
+          ## Installation
+
+          ```bash
+          # Download (choose your platform)
+          curl -LO https://github.com/The-HOLE-Foundation/hole-docs/releases/download/${{ steps.version.outputs.version }}/hole-docs-${{ steps.version.outputs.version }}-linux-amd64.tar.gz
+
+          # Extract
+          tar -xzf hole-docs-${{ steps.version.outputs.version }}-linux-amd64.tar.gz
+
+          # Install
+          sudo mv hole-docs /usr/local/bin/
+
+          # Verify
+          hole-docs help
+          ```
+
+          ## Features
+
+          ✅ **Merge PDFs** - Combine FOIA responses, consolidate records
+          ✅ **Split PDFs** - Extract relevant pages, separate documents
+          ✅ **Render to Images** - Convert for analysis, archiving, evidence
+          ✅ **Optimize** - Reduce file sizes for sharing
+          ✅ **Extract Annotations** - Pull reviewer comments and highlights
+          ✅ **MCP Server** - AI assistant integration
+          ✅ **Free Forever** - No subscriptions, no fees
+
+          ## Quick Examples
+
+          ```bash
+          # Merge FOIA responses
+          hole-docs merge complete.pdf agency1.pdf agency2.pdf
+
+          # Render for analysis
+          hole-docs render disclosure.pdf ./photos/
+
+          # Extract reviewer comments
+          hole-docs annotations reviewed-draft.pdf
+
+          # Start MCP server for AI assistants
+          hole-docs serve --http
+          ```
+
+          ## Requirements
+
+          **System dependencies** (install via package manager):
+          ```bash
+          # macOS
+          brew install qpdf mupdf ghostscript
+
+          # Ubuntu/Debian
+          sudo apt install qpdf mupdf-tools ghostscript
+          ```
+
+          **No other dependencies required** - static binary, runs anywhere.
+
+          ## Documentation
+
+          - [Installation Guide](https://github.com/The-HOLE-Foundation/hole-docs/blob/main/INSTALL.md)
+          - [Architecture](https://github.com/The-HOLE-Foundation/hole-docs/blob/main/ARCHITECTURE.md)
+          - [Full Documentation](https://github.com/The-HOLE-Foundation/hole-docs)
+
+          ---
+
+          **Replaces expensive tools** like Adobe Acrobat ($240/year) with free, open-source alternative.
+
+          Built with ❤️ by The HOLE Foundation
+          EOF
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: hole-docs ${{ steps.version.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
