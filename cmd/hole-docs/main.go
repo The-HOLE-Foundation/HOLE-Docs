@@ -30,6 +30,8 @@ func main() {
 	// PDF operations
 	case "merge":
 		commands.Merge(os.Args[2:])
+	case "merge-dir":
+		commands.MergeDir(os.Args[2:])
 	case "split":
 		commands.Split(os.Args[2:])
 	case "optimize":
